@@ -67,7 +67,8 @@ contract HourlySquadGame is Ownable, ReentrancyGuard, ERC2771Context {
         uint256 totalPool,
         uint256 winnerPool,
         uint256 settledBlockNumber,
-        bytes32 settledBlockHash
+        bytes32 settledBlockHash,
+        uint256[4] factionPools
     );
     event RewardsClaimed(
         uint256 indexed roundId,
@@ -172,6 +173,7 @@ contract HourlySquadGame is Ownable, ReentrancyGuard, ERC2771Context {
      * 用户需对 Permit 消息签名。
      */
     function placeBetWithPermit(
+        address bettor,
         uint8 faction,
         uint256 amount,
         uint256 deadline,
@@ -179,13 +181,11 @@ contract HourlySquadGame is Ownable, ReentrancyGuard, ERC2771Context {
         bytes32 r,
         bytes32 s
     ) external nonReentrant {
-        address sender = _msgSender();
-
         // 执行 Permit (如果 Token 支持)
         // 注意：这里假设 paymentToken 标准实现了 permit。
         try
             IERC20Permit(address(paymentToken)).permit(
-                sender,
+                bettor,
                 address(this),
                 amount,
                 deadline,
@@ -199,7 +199,7 @@ contract HourlySquadGame is Ownable, ReentrancyGuard, ERC2771Context {
             // 如果 Permit 失败或不支持，交易回滚
             revert("Permit failed");
         }
-        _placeBet(sender, faction, amount);
+        _placeBet(bettor, faction, amount);
     }
 
     /**
@@ -284,7 +284,15 @@ contract HourlySquadGame is Ownable, ReentrancyGuard, ERC2771Context {
         // 如果该轮没有任何下注，直接结算
         if (round.totalPool == 0) {
             round.isSettled = true;
-            emit RoundSettled(roundId, 0, 0, 0, 0, bytes32(0)); // 0 阵营赢，0 奖池
+            emit RoundSettled(
+                roundId,
+                0,
+                0,
+                0,
+                0,
+                bytes32(0),
+                [uint256(0), 0, 0, 0]
+            ); // 0 阵营赢，0 奖池
             return;
         }
 
@@ -317,7 +325,8 @@ contract HourlySquadGame is Ownable, ReentrancyGuard, ERC2771Context {
             round.totalPool,
             round.winnerPool,
             round.settledBlockNumber,
-            round.settledBlockHash
+            round.settledBlockHash,
+            roundFactionPools[roundId]
         );
     }
 
