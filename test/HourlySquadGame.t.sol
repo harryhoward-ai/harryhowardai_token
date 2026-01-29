@@ -36,7 +36,7 @@ contract PermitDebugTest is Test {
         relayer = address(0xB0B);
 
         token = new MockToken();
-        game = new HourlySquadGame(address(token), relayer); // trustedForwarder can be relayer or anything
+        game = new HourlySquadGame(address(token), relayer, user); // trustedForwarder can be relayer or anything, operator is user
 
         // Give user some tokens
         token.mint(user, 1000 * 10 ** 18);
@@ -101,5 +101,54 @@ contract PermitDebugTest is Test {
         assertEq(betAmount, amount);
         assertEq(betFaction, faction);
         assertFalse(isClaimed);
+    }
+
+    function testDistributeRewards_Operator() public {
+        address operator = address(0xCAFE);
+
+        // 1. Set Operator
+        game.setOperator(operator);
+        assertEq(game.operator(), operator);
+
+        // 2. Mock a round and bet (simplified flow)
+        uint256[] memory roundIds = new uint256[](0);
+
+        // Call as Operator
+        vm.prank(operator);
+        game.distributeRewards(user, roundIds); // Should succeed (empty loop)
+
+        // Call as Random user
+        vm.prank(address(0xDEAD));
+        vm.expectRevert("Unauthorized");
+        game.distributeRewards(user, roundIds);
+    }
+
+    function testSetOperator_OnlyOwner() public {
+        address newOp = address(0xABCD);
+
+        // Prank as non-owner (user is the operator initially in setUp, but not owner. Owner is test contract)
+        // Wait, in setUp: game = new ... (this test contract is the owner)
+        // Check owner
+        assertEq(game.owner(), address(this));
+
+        vm.prank(user);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                Ownable.OwnableUnauthorizedAccount.selector,
+                user
+            )
+        );
+        game.setOperator(newOp);
+
+        // Call as owner
+        game.setOperator(newOp);
+        assertEq(game.operator(), newOp);
+    }
+
+    function testDistributeRewards_TrustedForwarder() public {
+        // Relayer is set as TrustedForwarder in constructor
+        vm.prank(relayer);
+        uint256[] memory roundIds = new uint256[](0);
+        game.distributeRewards(user, roundIds); // Should succeed
     }
 }

@@ -34,6 +34,7 @@ contract HourlySquadGame is Ownable, ReentrancyGuard, ERC2771Context {
     // ------------------- State Variables -------------------
 
     IERC20 public immutable paymentToken;
+    address public operator;
 
     // 游戏周期：1小时 (3600秒)
     uint256 public constant ROUND_DURATION = 3600;
@@ -76,6 +77,10 @@ contract HourlySquadGame is Ownable, ReentrancyGuard, ERC2771Context {
         uint256 amount
     );
     event MaxBetAmountUpdated(uint256 newAmount);
+    event OperatorUpdated(
+        address indexed previousOperator,
+        address indexed newOperator
+    );
 
     // ------------------- Errors -------------------
 
@@ -101,12 +106,14 @@ contract HourlySquadGame is Ownable, ReentrancyGuard, ERC2771Context {
      */
     constructor(
         address _paymentToken,
-        address _trustedForwarder
+        address _trustedForwarder,
+        address _operator
     ) Ownable(msg.sender) ERC2771Context(_trustedForwarder) {
         require(_paymentToken != address(0), "Invalid payment token");
         // trustedForwarder can be zero if not using it immediately, but ideally set.
 
         paymentToken = IERC20(_paymentToken);
+        operator = _operator;
         maxBetAmount = 1000 * 10 ** 18; // 默认最大下注，需根据 Token 精度调整
     }
 
@@ -396,7 +403,13 @@ contract HourlySquadGame is Ownable, ReentrancyGuard, ERC2771Context {
     function distributeRewards(
         address user,
         uint256[] calldata roundIds
-    ) external onlyOwner nonReentrant {
+    ) external nonReentrant {
+        require(
+            msg.sender == owner() ||
+                msg.sender == operator ||
+                isTrustedForwarder(msg.sender),
+            "Unauthorized"
+        );
         uint256 totalReward = 0;
 
         for (uint256 i = 0; i < roundIds.length; i++) {
@@ -424,6 +437,12 @@ contract HourlySquadGame is Ownable, ReentrancyGuard, ERC2771Context {
     function setMaxBetAmount(uint256 _amount) external onlyOwner {
         maxBetAmount = _amount;
         emit MaxBetAmountUpdated(_amount);
+    }
+
+    function setOperator(address _newOperator) external onlyOwner {
+        require(_newOperator != address(0), "Invalid operator");
+        emit OperatorUpdated(operator, _newOperator);
+        operator = _newOperator;
     }
 
     /**

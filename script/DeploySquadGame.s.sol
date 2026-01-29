@@ -14,10 +14,13 @@ contract DeploySquadGame is Script {
         // 2. 开始广播
         vm.startBroadcast(deployerPrivateKey);
 
+        address operator = vm.envOr("OPERATOR_ADDRESS", msg.sender);
+
         // 3. 部署合约
         HourlySquadGame game = new HourlySquadGame(
             paymentToken,
-            trustedForwarder
+            trustedForwarder,
+            operator
         );
 
         // 4. 结束广播
